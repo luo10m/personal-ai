@@ -4,5 +4,5 @@ main="src/index.ts"
 compatibility_date = "2022-11-22"
 
 kv_namespaces = [
-    { binding = "personal_ai_chats", id = "<id>", preview_id = "<preview_id>"}
+    { binding = "personal_ai_chats", id = "d06adcee632247ef962ed5b500acbf4d", preview_id = "a176cbd87ca842c3ad5191efe60c88d9" }
 ]
