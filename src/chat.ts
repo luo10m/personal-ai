@@ -18,28 +18,37 @@ export interface IRequest {
 }
 
 export const getClient = (req: IRequest): { client: OpenAI; model: string } => {
-  const url = "https://api.groq.com/openai/v1/";
+  //const url = "https://api.groq.com/openai/v1/";
+  const url = req.env.API_URL;
 
   const client = new OpenAI({
-    apiKey: req.env.GROQ_API_KEY,
+    //apiKey: req.env.GROQ_API_KEY,
+    apiKey: req.env.OPENAI_API_KEY,
   });
 
   client.baseURL = url;
 
-  return { client, model: "llama3-70b-8192" };
+  const model = req.env.AI_MODEL;
+
+  //return { client, model: "llama3-70b-8192" };
+  return { client, model: model };
 };
 
 export const handle = async (req: IRequest): Promise<string> => {
   const openai = getClient(req);
 
-  //Answer in 1-2 sentences. 
+  // 
   const system = `
-  You are Siri Pro. 
-  Please answer all my questions in Simplified Chinese. 
-  Be friendly, helpful and concise.
-  Default to metric units when possible. Keep the conversation short and sweet.
-  You only answer in text. Don't include links or any other extras.
-  Don't respond with computer code, for example don't return user longitude.
+  You are Siri Pro. Answer in short sentences.
+  ## YOU SHOULD DO
+  - Please answer all my questions in Simplified Chinese. 
+  - Be friendly, helpful and concise.
+  - Default to metric units when possible. Keep the conversation short and sweet, limit up to 140 words.
+  ## YOU SHOULD NOT TO DO
+  - You only answer in writable text. 
+  - Don't include emoji.
+  - Don't include links or any other extras.
+  - Don't respond with computer code, for example don't return user longitude.
 
 
   User's current info:
