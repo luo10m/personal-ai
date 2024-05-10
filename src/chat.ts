@@ -3,6 +3,7 @@ import { ChatHistory } from "./history";
 import { FunctionHandler } from "./functions";
 
 export interface IBody {
+  user_id: string;
   chat_id: string;
   input: string;
   date: string;
@@ -35,15 +36,18 @@ export const getClient = (req: IRequest): { client: OpenAI; model: string } => {
 };
 
 export const handle = async (req: IRequest): Promise<string> => {
+  const maxMessages = parseInt(req.env.MAX_CONVERSATION_MESSAGES || "3", 10);
   const openai = getClient(req);
 
   // 
   const system = `
-  You are Siri Pro. Answer in short sentences.
+  You are Siri Pro. Answer in less than 4 short sentences and sweet.
   ## YOU SHOULD DO
-  - Please answer all my questions in Simplified Chinese. 
+  - Please answer all my questions in Simplified Chinese. If I speak English, you speak English with me.
   - Be friendly, helpful and concise.
-  - Default to metric units when possible. Keep the conversation short and sweet, limit up to 140 words.
+  - Default to metric units when possible. 
+  - If you don't know the answer, it is recommended that you advise the user to search online to confirm.
+  - 
   ## YOU SHOULD NOT TO DO
   - You only answer in writable text. 
   - Don't include emoji.
@@ -58,7 +62,7 @@ export const handle = async (req: IRequest): Promise<string> => {
 
   console.log("system", system);
   const chat = ChatHistory.getInstance(req.env.personal_ai_chats);
-  await chat.add(req.request.chat_id, {
+  await chat.add(req.request.user_id, '', {
     role: "user",
     content: req.request.input,
   });
@@ -69,14 +73,14 @@ export const handle = async (req: IRequest): Promise<string> => {
       model: openai.model,
       messages: [
         { role: "system", content: system },
-        ...(await chat.get(req.request.chat_id)),
+        ...(await chat.get(req.request.user_id)),
       ],
       tools: FunctionHandler.functions,
     });
 
     console.log("ask", JSON.stringify(ask, null, 2));
     if (ask.choices[0].message.tool_calls) {
-      chat.add(req.request.chat_id, {
+      chat.add(req.request.user_id, '', {
         role: "assistant",
         name: "tool",
         tool_calls: ask.choices[0].message.tool_calls,
@@ -90,7 +94,7 @@ export const handle = async (req: IRequest): Promise<string> => {
         );
 
         console.log("result", result);
-        await chat.add(req.request.chat_id, {
+        await chat.add(req.request.user_id, '', {
           role: "tool",
           tool_call_id: tool.id,
           content: result,
@@ -100,7 +104,7 @@ export const handle = async (req: IRequest): Promise<string> => {
 
     if (ask.choices[0].finish_reason === "stop") {
       response = ask.choices[0].message.content;
-      await chat.add(req.request.chat_id, {
+      await chat.add(req.request.user_id, '', {
         role: "assistant",
         content: response,
       });

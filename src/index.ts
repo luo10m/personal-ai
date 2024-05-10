@@ -18,7 +18,7 @@ app.post("/", async (c) => {
   } catch (error) {
     console.log(error);
     return c.json({
-      response: "Something went wrong, we are working on it",
+      response: `Something went wrong, we are working on it. Error: ${error.message}`,
     });
   }
 });
