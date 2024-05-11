@@ -17,6 +17,10 @@ export class ChatHistory {
     return ChatHistory.instance;
   }
 
+  async clear(chat_id: string) {
+    await this.kv.delete(chat_id);
+  }
+
   async add(chat_id: string, message: ChatCompletionMessageParam) {
     const chat = await this.kv.get(chat_id);
     if (!chat) {

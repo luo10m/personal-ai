@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { handle, IBody } from "./chat";
+import { ChatHistory } from "./history";
 
 const app = new Hono();
 
@@ -17,8 +18,14 @@ app.post("/", async (c) => {
     });
   } catch (error) {
     console.log(error);
+
+    // Clear chat history if met error
+    const chat = ChatHistory.getInstance(c.env.personal_ai_chats as KVNamespace<string>);
+    await chat.clear(body.chat_id);
+
     return c.json({
-      response: "Something went wrong, we are working on it",
+      //response: `Something went wrong, we are working on it. Error: ${error.message}`,
+      response: "抱歉我没听清，请再说一次",
     });
   }
 });
