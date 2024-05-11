@@ -12,6 +12,7 @@ yarn.lock
 wrangler.dev.toml
 wrangler.toml
 .wrangler
+wrangler.toml
 
 # Author did not include the lockfile in the published package so I respect that.
 bun.lockb
