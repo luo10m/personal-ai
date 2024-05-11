@@ -3,7 +3,6 @@ import { ChatHistory } from "./history";
 import { FunctionHandler } from "./functions";
 
 export interface IBody {
-  user_id: string;
   chat_id: string;
   input: string;
   date: string;
@@ -36,7 +35,6 @@ export const getClient = (req: IRequest): { client: OpenAI; model: string } => {
 };
 
 export const handle = async (req: IRequest): Promise<string> => {
-  const maxMessages = parseInt(req.env.MAX_CONVERSATION_MESSAGES || "3", 10);
   const openai = getClient(req);
 
   const system = `
@@ -73,7 +71,7 @@ export const handle = async (req: IRequest): Promise<string> => {
 
   console.log("system", system);
   const chat = ChatHistory.getInstance(req.env.personal_ai_chats);
-  await chat.add(req.request.user_id, '', {
+  await chat.add(req.request.chat_id, {
     role: "user",
     content: req.request.input,
   });
@@ -85,7 +83,7 @@ export const handle = async (req: IRequest): Promise<string> => {
       model: openai.model,
       messages: [
         { role: "system", content: system },
-        ...(await chat.get(req.request.user_id)),
+        ...(await chat.get(req.request.chat_id)),
       ],
       tools: FunctionHandler.functions,
       tool_choice: "auto",  // auto is default. "none" menas don't call function
@@ -130,7 +128,7 @@ export const handle = async (req: IRequest): Promise<string> => {
 
     if (ask.choices[0].finish_reason === "stop") {
       response = ask.choices[0].message.content;
-      await chat.add(req.request.user_id, '', {
+      await chat.add(req.request.chat_id, {
         role: "assistant",
         content: response,
       });
