@@ -25,7 +25,7 @@ app.post("/", async (c) => {
 
     return c.json({
       //response: `Something went wrong, we are working on it. Error: ${error.message}`,
-      response: "抱歉我没听清，请再说一次",
+      response: "抱歉出错了。请试试别的",
     });
   }
 });
