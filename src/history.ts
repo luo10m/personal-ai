@@ -6,9 +6,12 @@ export class ChatHistory {
   private static instance: ChatHistory;
   private kv: KVNamespace;
   private cache: Map<string, ChatEntry[]> = new Map();
+  private persistInterval: NodeJS.Timer;
+  private dirtyCache: Set<string> = new Set();
 
   private constructor(kv: KVNamespace) {
     this.kv = kv;
+    this.persistInterval = setInterval(this.persistCache.bind(this), 5000);
   }
 
   public static getInstance(kv: KVNamespace): ChatHistory {
@@ -18,14 +21,21 @@ export class ChatHistory {
     return ChatHistory.instance;
   }
 
+  private persistCache() {
+    for (const chatId of this.dirtyCache) {
+      const entries = this.cache.get(chatId);
+      this.kv.put(chatId, JSON.stringify(entries));
+    }
+    this.dirtyCache.clear();
+  }
+
   async clear(chat_id: string) {
     await this.kv.delete(chat_id);
     this.cache.delete(chat_id);
+    this.dirtyCache.delete(chat_id);
   }
 
-
   async add(chat_id: string, message: ChatCompletionMessageParam) {
-    // Periodically persist cached data to the KV namespace.
     if (!this.cache.has(chat_id)) {
       const chat = await this.kv.get(chat_id);
       this.cache.set(chat_id, chat ? JSON.parse(chat) : []);
@@ -33,15 +43,10 @@ export class ChatHistory {
 
     const entries = this.cache.get(chat_id);
     entries.push(message);
-    console.log(JSON.stringify(entries, null, 2));
-
-    setInterval(async () => {
-      await this.kv.put(chat_id, JSON.stringify(entries));
-    }, 5000); // every 5 seconds
+    this.dirtyCache.add(chat_id);
   }
 
   async get(chat_id: string): Promise<ChatEntry[]> {
-    // Shoot cache first. If not, get from kv
     if (this.cache.has(chat_id)) {
       return this.cache.get(chat_id);
     }
@@ -50,9 +55,9 @@ export class ChatHistory {
     if (!chat) {
       return [];
     }
+
     const entries = JSON.parse(chat);
     this.cache.set(chat_id, entries);
-    console.log(chat);
     return entries;
   }
 }
