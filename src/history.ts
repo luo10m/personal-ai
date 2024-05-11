@@ -21,10 +21,10 @@ export class ChatHistory {
     return ChatHistory.instance;
   }
 
-  private persistCache() {
-    for (const chatId of this.dirtyCache) {
+  private async persistCache() {
+    for (const chatId of Array.from(this.dirtyCache)) {
       const entries = this.cache.get(chatId);
-      this.kv.put(chatId, JSON.stringify(entries));
+      await this.kv.put(chatId, JSON.stringify(entries));
     }
     this.dirtyCache.clear();
   }
