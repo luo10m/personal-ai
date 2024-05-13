@@ -1,8 +1,9 @@
+import { search } from './search';
 import { weather } from "./weather";
 import { IFunction } from "./type";
 import { IRequest } from "../chat";
 
-const functions: IFunction[] = [weather];
+const functions: IFunction[] = [search, weather];
 
 const handle = async (
   name: string,
