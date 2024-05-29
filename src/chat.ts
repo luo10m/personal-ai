@@ -5,9 +5,13 @@ import { FunctionHandler } from "./functions";
 export interface IBody {
   user_id: string;
   chat_id: string;
-  input: Buffer;
+  input: string;
   date: string;
   type: "text" | "audio" | "image" | "video";
+}
+
+export interface IAudioRequest extends IRequest {
+  audioFile: File;
 }
 
 
@@ -51,7 +55,7 @@ export const handleTextRequest = async (req: IRequest): Promise<string> => {
   const chat = ChatHistory.getInstance(req.env.personal_ai_chats);
   await chat.add(req.request.chat_id, {
     role: "user",
-    content: req.request.input.toString('utf-8'),
+    content: req.request.input,
   });
 
   let response = "";
