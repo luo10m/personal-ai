@@ -3,14 +3,13 @@ import { ChatHistory } from "./history";
 import { FunctionHandler } from "./functions";
 
 export interface IBody {
+  user_id: string;
   chat_id: string;
-  input: string;
+  input: Buffer;
   date: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  };
+  type: "text" | "audio" | "image" | "video";
 }
+
 
 export interface IRequest {
   env: any;
@@ -31,14 +30,14 @@ export const getClient = (req: IRequest): { client: OpenAI; model: string } => {
   return { client, model: model };
 };
 
-export const handle = async (req: IRequest): Promise<string> => {
+export const handleTextRequest = async (req: IRequest): Promise<string> => {
   const openai = getClient(req);
 
   const system = `
   You are Siri Pro. Be friendly, helpful and concise. Keep the conversation short and sweet.
   - You answer all my questions in Simplified Chinese. If I speak English, you speak English with me.
   - If not telling a story, you summarize your answer in one to two sentences. Your text must be casual conversational style. 
-  - Don't format the output text. Avoid any embellishments, formatting symbols, quotation marks, line breaks, etc.
+  - Please provide your response in plain text without any formatting characters such as "\n", "**", "", etc. I only need text content that can be read directly.
   - Don't include emoji, text formatting Symbols, parentheses, line break, links or any other extras.
   - If you don't know the answer, it is recommended that you advise the user to search online to confirm.
   - Don't respond with computer code, for example don't return user longitude.
@@ -46,14 +45,13 @@ export const handle = async (req: IRequest): Promise<string> => {
 
   User's current info:
   date: ${req.request.date}
-  lat:${req.request.location.latitude}, lon:${req.request.location.longitude}
   `;
 
   console.log("system", system);
   const chat = ChatHistory.getInstance(req.env.personal_ai_chats);
   await chat.add(req.request.chat_id, {
     role: "user",
-    content: req.request.input,
+    content: req.request.input.toString('utf-8'),
   });
 
   let response = "";
