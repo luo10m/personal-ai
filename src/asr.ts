@@ -65,12 +65,25 @@ function generateHeader(options = {}) {
     return header;
 }
 
-function parseResponse(res: ArrayBuffer): any {
-    const buffer = new Uint8Array(res);
+function parseResponse(res: any): any {
+    let buffer: Uint8Array;
+    if (res instanceof Uint8Array) {
+        buffer = res;
+    } else if (typeof res === 'string') {
+        console.log('res is string: ', res);
+        const encoder = new TextEncoder();
+        buffer = encoder.encode(res);
+    } else if (res instanceof ArrayBuffer) {
+        buffer = new Uint8Array(res);
+    } else if (typeof res === 'object' && res.data instanceof ArrayBuffer) {
+        buffer = new Uint8Array(res.data);
+    } else {
+        throw new Error('Unsupported data type');
+    }
+
     const dataView = new DataView(buffer.buffer);
 
-    console.log("res type is ", typeof res);
-    console.log("REP: ", res);
+    //console.log("REP: ", res);
 
     const protocolVersion = dataView.getUint8(0) >> 4;
     const headerSize = dataView.getUint8(0) & 0x0f;
@@ -79,27 +92,31 @@ function parseResponse(res: ArrayBuffer): any {
     const serializationMethod = dataView.getUint8(2) >> 4;
     const messageCompression = dataView.getUint8(2) & 0x0f;
     const reserved = dataView.getUint8(3);
+
+    // 提取头部扩展和 payload 数据
     const headerExtensions = buffer.slice(4, headerSize * 4);
     const payload = buffer.slice(headerSize * 4);
+
 
     const result: any = {};
     let payloadMsg = null;
     let payloadSize = 0;
 
+    let headerSize2 = headerSize;
     if (messageType === SERVER_FULL_RESPONSE) {
-        payloadSize = dataView.getUint32(headerSize * 4, true);
+        payloadSize = dataView.getUint32(headerSize2 * 4, true);
         payloadMsg = payload.slice(4);
     } else if (messageType === SERVER_ACK) {
-        const seq = dataView.getUint32(headerSize * 4, true);
+        const seq = dataView.getUint32(headerSize2 * 4, true);
         result.seq = seq;
         if (payload.length >= 8) {
-            payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+            payloadSize = dataView.getUint32(headerSize2 * 4 + 4, true);
             payloadMsg = payload.slice(8);
         }
     } else if (messageType === SERVER_ERROR_RESPONSE) {
-        const code = dataView.getUint32(headerSize * 4, true);
+        const code = dataView.getUint32(headerSize2 * 4, true);
         result.code = code;
-        payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+        payloadSize = dataView.getUint32(headerSize2 * 4 + 4, true);
         payloadMsg = payload.slice(8);
     }
 
@@ -131,223 +148,6 @@ function parseResponse(res: ArrayBuffer): any {
 }
 
 
-
-// function parseResponse(res) {
-//     const buffer = new Uint8Array(res);
-//     const dataView = new DataView(buffer.buffer);
-
-//     const protocolVersion = dataView.getUint8(0) >> 4;
-//     const headerSize = dataView.getUint8(0) & 0x0f;
-//     const messageType = dataView.getUint8(1) >> 4;
-//     const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
-//     const serializationMethod = dataView.getUint8(2) >> 4;
-//     const messageCompression = dataView.getUint8(2) & 0x0f;
-//     const reserved = dataView.getUint8(3);
-//     const headerExtensions = buffer.slice(4, headerSize * 4);
-//     const payload = buffer.slice(headerSize * 4);
-
-//     const result = {};
-//     let payloadMsg = null;
-//     let payloadSize = 0;
-
-//     if (messageType === SERVER_FULL_RESPONSE) {
-//         payloadSize = dataView.getUint32(headerSize * 4, true);
-//         payloadMsg = payload.slice(4);
-//     } else if (messageType === SERVER_ACK) {
-//         const seq = dataView.getUint32(headerSize * 4, true);
-//         result.seq = seq;
-//         if (payload.length >= 8) {
-//             payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
-//             payloadMsg = payload.slice(8);
-//         }
-//     } else if (messageType === SERVER_ERROR_RESPONSE) {
-//         const code = dataView.getUint32(headerSize * 4, true);
-//         result.code = code;
-//         payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
-//         payloadMsg = payload.slice(8);
-//     }
-
-//     if (payloadMsg === null) {
-//         return result;
-//     }
-
-//     if (messageCompression === GZIP_COMPRESSION) {
-//         const decompressedData = pako.inflate(payloadMsg);
-//         payloadMsg = new TextDecoder().decode(decompressedData);
-//     }
-
-//     if (serializationMethod === JSON_SERIALIZATION) {
-//         try {
-//             payloadMsg = JSON.parse(payloadMsg);
-//         } catch (error) {
-//             console.error('Error parsing JSON:', error);
-//             console.error('Received data:', payloadMsg);
-//             return { error: 'Invalid JSON data received' };
-//         }
-//     } else if (serializationMethod !== NO_SERIALIZATION) {
-//         payloadMsg = new TextDecoder().decode(payloadMsg);
-//     }
-
-//     result.payloadMsg = payloadMsg;
-//     result.payloadSize = payloadSize;
-
-//     return result;
-// }
-
-
-// function parseResponse(res: string) {
-//     const buffer = new ArrayBuffer(res.length);
-//     const view = new Uint8Array(buffer);
-//     for (let i = 0; i < res.length; i++) {
-//         view[i] = res.charCodeAt(i);
-//     }
-
-//     const dataView = new DataView(buffer);
-//     const protocolVersion = dataView.getUint8(0) >> 4;
-//     const headerSize = dataView.getUint8(0) & 0x0f;
-//     const messageType = dataView.getUint8(1) >> 4;
-//     const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
-//     const serializationMethod = dataView.getUint8(2) >> 4;
-//     const messageCompression = dataView.getUint8(2) & 0x0f;
-//     const reserved = dataView.getUint8(3);
-//     const headerExtensions = new Uint8Array(buffer, 4, headerSize * 4 - 4);
-//     const payload = new Uint8Array(buffer, headerSize * 4);
-
-//     const result = {};
-//     let payloadMsg = null;
-//     let payloadSize = 0;
-
-//     if (messageType === SERVER_FULL_RESPONSE) {
-//         payloadSize = dataView.getUint32(headerSize * 4);
-//         payloadMsg = payload.slice(4);
-//     } else if (messageType === SERVER_ACK) {
-//         const seq = dataView.getUint32(headerSize * 4);
-//         result.seq = seq;
-//         if (payload.length >= 8) {
-//             payloadSize = dataView.getUint32(headerSize * 4 + 4);
-//             payloadMsg = payload.slice(8);
-//         }
-//     } else if (messageType === SERVER_ERROR_RESPONSE) {
-//         const code = dataView.getUint32(headerSize * 4);
-//         result.code = code;
-//         payloadSize = dataView.getUint32(headerSize * 4 + 4);
-//         payloadMsg = payload.slice(8);
-//     }
-
-//     if (payloadMsg === null) {
-//         return result;
-//     }
-
-//     if (messageCompression === GZIP_COMPRESSION) {
-//         const decompressedData = pako.inflate(payloadMsg);
-//         payloadMsg = new TextDecoder().decode(decompressedData);
-//     }
-
-//     if (serializationMethod === JSON_SERIALIZATION) {
-//         try {
-//             payloadMsg = JSON.parse(payloadMsg);
-//         } catch (error) {
-//             console.error('Error parsing JSON:', error);
-//             console.error('Received data:', payloadMsg);
-//             // 根据需要处理解析错误,例如返回错误结果或重试
-//             return {
-//                 error: 'Invalid JSON data received',
-//             };
-//         }
-//     } else if (serializationMethod !== NO_SERIALIZATION) {
-//         payloadMsg = new TextDecoder().decode(payloadMsg);
-//     }
-
-
-//     result.payloadMsg = payloadMsg;
-//     result.payloadSize = payloadSize;
-
-//     return result;
-// }
-
-// function parseResponse(res) {
-// const buffer = new ArrayBuffer(res.length);
-// const view = new Uint8Array(buffer);
-// for (let i = 0; i < res.length; i++) {
-//     view[i] = res.charCodeAt(i);
-// }
-
-// const dataView = new DataView(res);
-// const protocolVersion = dataView.getUint8(0) >> 4;
-// console.log("protocolVersion:$%x", protocolVersion);
-// const headerSize = dataView.getUint8(0) & 0x0f;
-// console.log("headSize:$%x", headerSize);
-// const messageType = dataView.getUint8(1) >> 4;
-// console.log("messageType:%$x", messageType)
-// if (messageType == 0xf) {
-//     console.log("!Server downpost error code.");
-// }
-// const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
-// console.log("messageTypeSpecificFlags:$%x", messageTypeSpecificFlags);
-// const serializationMethod = dataView.getUint8(2) >> 4;
-// console.log("serializationMethod:$%x", serializationMethod);
-// const messageCompression = dataView.getUint8(2) & 0x0f;
-// console.log("messageCompression:$%x", messageCompression);
-// const reserved = dataView.getUint8(3);
-// console.log("reserved:$%x", reserved);
-// const headerExtensions = new Uint8Array(buffer, 4, headerSize * 4 - 4);
-// console.log("headerExtensions:", headerExtensions);
-// const payload = new Uint8Array(buffer, headerSize * 4);
-// console.log("payload:", payload);
-
-// const result = {};
-// let payloadMsg = null;
-// let payloadSize = 0;
-
-// if (messageType === SERVER_FULL_RESPONSE) {
-//     payloadSize = dataView.getUint32(headerSize * 4);
-//     payloadMsg = payload.slice(4);
-// } else if (messageType === SERVER_ACK) {
-//     const seq = dataView.getUint32(headerSize * 4);
-//     result.seq = seq;
-//     if (payload.length >= 8) {
-//         payloadSize = dataView.getUint32(headerSize * 4 + 4);
-//         payloadMsg = payload.slice(8);
-//     }
-// } else if (messageType === SERVER_ERROR_RESPONSE) {
-//     const code = dataView.getUint32(headerSize * 4);
-//     result.code = code;
-//     payloadSize = dataView.getUint32(headerSize * 4 + 4);
-//     payloadMsg = payload.slice(8);
-// }
-
-// if (payloadMsg === null) {
-//     return result;
-// }
-
-// if (messageCompression === GZIP_COMPRESSION) {
-//     const decompressedData = pako.inflate(payloadMsg);
-//     payloadMsg = new TextDecoder().decode(decompressedData);
-// }
-
-// if (serializationMethod === JSON_SERIALIZATION) {
-//     try {
-//         payloadMsg = JSON.parse(payloadMsg);
-//     } catch (error) {
-//         console.error('Error parsing JSON:', error);
-//         console.error('Received data:', payloadMsg);
-//         // 根据需要处理解析错误,例如返回错误结果或重试
-//         return {
-//             error: 'Invalid JSON data received',
-//         };
-//     }
-// } else if (serializationMethod !== NO_SERIALIZATION) {
-//     payloadMsg = new TextDecoder().decode(payloadMsg);
-// }
-
-// result.payloadMsg = payloadMsg;
-// result.payloadSize = payloadSize;
-
-// return result;
-
-// }
-
-
 async function getWavInfo(audioFile: File): Promise<{ sampleRate: number; bitsPerSample: number; numChannels: number }> {
     const buffer = await audioFile.arrayBuffer();
     const dataView = new DataView(buffer);
@@ -362,7 +162,6 @@ async function getWavInfo(audioFile: File): Promise<{ sampleRate: number; bitsPe
         numChannels,
     };
 }
-
 
 class AsrWsClient {
     constructor(cluster, options = {}) {
@@ -421,12 +220,28 @@ class AsrWsClient {
     }
 
     async *sliceData(data, chunkSize) {
-        for (let offset = 0; offset < data.length; offset += chunkSize) {
-            const chunk = data.slice(offset, offset + chunkSize);
-            const last = offset + chunkSize >= data.length;
+        console.log('ooo');
+        // for (let offset = 0; offset < data.length; offset += chunkSize) {
+        //     const chunk = data.slice(offset, offset + chunkSize);
+        //     console.log('.');
+        //     const last = offset + chunkSize >= data.length;
+        //     console.log('/');
+        //     yield { chunk, last };
+        // }
+        let offset = 0;
+        while (offset < data.length) {
+            console.log('oooppp');
+            const remaining = data.length - offset;
+            const chunk = data.slice(offset, offset + Math.min(chunkSize, remaining));
+            const last = offset + chunk.length === data.length;
+            if (last) {
+                await new Promise((resolve) => resolve());
+            }
+            offset += chunk.length;
             yield { chunk, last };
         }
     }
+
 
     tokenAuth() {
         return { Authorization: `Bearer; ${this.token}` };
@@ -436,17 +251,17 @@ class AsrWsClient {
         const encoder = new TextEncoder();
         const reqid = uuid.v4();
         const requestParams = this.constructRequest(reqid);
-        console.log('\nConstructParams: ', requestParams);
+        //console.log('\nConstructParams: ', requestParams);
 
         const jsonString = JSON.stringify(requestParams);
         const jsonBytes = encoder.encode(jsonString);
         const payloadBytes = await gzipAsync(jsonBytes);
 
         var buffer = new Uint32Array([payloadBytes.length]);
-        console.log("payloadBytes length: ", buffer);
+        //console.log("payloadBytes length: ", buffer);
         const view = new DataView(buffer.buffer);
         var bufferBig = view.getUint32(0, false);
-        console.log("payloadBytes - big - length: ", bufferBig.toString(16));
+        //console.log("payloadBytes - big - length: ", bufferBig.toString(16));
         var b8 = new Uint8Array(4);
         b8[0] = (bufferBig >> 0) & 0xff;
         b8[1] = (bufferBig >> 8) & 0xff;
@@ -454,7 +269,7 @@ class AsrWsClient {
         b8[3] = (bufferBig >> 24) & 0xff;
 
 
-        console.log("payloadByts length is: ", payloadBytes.length);
+        //console.log("payloadByts length is: ", payloadBytes.length);
         const fullClientRequest = new Uint8Array([
             ...generateHeader(),
             ...b8,
@@ -467,52 +282,6 @@ class AsrWsClient {
         console.log('header is: \n', header);
         console.log('Connecting to wss servers...');
 
-        // const ws = new WebSocket(this.wsUrl);
-
-        // await new Promise((resolve) => {
-        //     ws.on('open', () => {
-        //         console.log('WebSocket connection established.');
-        //         resolve(null);
-        //     });
-
-        //     ws.on('error', (error) => {
-        //         console.error('WebSocket error:', error);
-        //         reject(error);
-        //     });
-
-        //     ws.on('timeout', () => {
-        //         console.error('WebSocket connection timeout.');
-        //         reject(new Error('WebSocket connection timeout.'));
-        //     });
-        // });
-        // console.log('Sending full client request...');
-        // ws.send(fullClientRequest);
-
-        // let result;
-        // await new Promise((resolve) => {
-        //     ws.on('message', (data) => {
-        //         result = parseResponse(data);
-        //         if (result.payloadMsg && result.payloadMsg.code !== this.successCode) {
-        //             console.error('Error response received:', result);
-        //             ws.close();
-        //             reject(new Error('Error response received.'));
-        //         } else {
-        //             console.log('Full client request response received.');
-        //             resolve(null);
-        //         }
-        //     });
-
-        //     ws.on('error', (error) => {
-        //         console.error('WebSocket error:', error);
-        //         reject(error);
-        //     });
-
-        //     ws.on('timeout', () => {
-        //         console.error('WebSocket response timeout.');
-        //         reject(new Error('WebSocket response timeout.'));
-        //     });
-        // });
-
         console.log('Connecting to WebSocket server...');
         const ws = new WebSocket(this.wsUrl);
 
@@ -521,13 +290,13 @@ class AsrWsClient {
         await new Promise((resolve, reject) => {
             ws.onopen = () => {
                 console.log('WebSocket connection established.');
-                ws.send(fullClientRequest);
                 ws.send(JSON.stringify(header));
+                ws.send(fullClientRequest);
             };
 
             ws.onmessage = (event) => {
                 console.log('event.data type:', typeof event.data);
-                result = parseResponse(event);
+                result = parseResponse(event.data);
                 if (result.payloadMsg && result.payloadMsg.code !== this.successCode) {
                     console.error('Error response received:', result);
                     ws.close();
@@ -553,17 +322,32 @@ class AsrWsClient {
         let seq = 1;
         console.log('Sending audio data...');
         for await (const { chunk, last } of this.sliceData(audioFile, segmentSize)) {
+            console.log('YYYYYYYYYY');
             const payloadBytes = await gzipAsync(chunk);
+
+            var buffer = new Uint32Array([payloadBytes.length]);
+            console.log("payloadBytes length: ", buffer);
+            const view = new DataView(buffer.buffer);
+            var bufferBig = view.getUint32(0, false);
+            console.log("payloadBytes - big - length: ", bufferBig.toString(16));
+            var b8 = new Uint8Array(4);
+            b8[0] = (bufferBig >> 0) & 0xff;
+            b8[1] = (bufferBig >> 8) & 0xff;
+            b8[2] = (bufferBig >> 16) & 0xff;
+            b8[3] = (bufferBig >> 24) & 0xff;
+
             const audioOnlyRequest = new Uint8Array([
                 ...generateHeader({
                     messageType: CLIENT_AUDIO_ONLY_REQUEST,
                     messageTypeSpecificFlags: last ? NEG_SEQUENCE : NO_SEQUENCE,
                 }),
-                ...new TextEncoder().encode(payloadBytes.length.toString(16).padStart(8, '0')),
+                ...b8,
                 ...payloadBytes,
             ]);
 
+            ws.send(JSON.stringify(header));
             ws.send(audioOnlyRequest);
+            console.log("send chunk # ", seq);
 
             await new Promise((resolve) => {
                 ws.onmessage = (data) => {
@@ -598,6 +382,9 @@ class AsrWsClient {
         const { sampleRate, bitsPerSample, numChannels } = await getWavInfo(audioFile);
         const sizePerSec = Math.floor((sampleRate * bitsPerSample * numChannels) / 8);
         const segmentSize = Math.floor((sizePerSec * this.segDuration) / 1000);
+        console.log('Wav info: ', sampleRate, bitsPerSample, numChannels,
+            sizePerSec, segmentSize
+        );
 
         return await this.segmentDataProcessor(audioFile, segmentSize);
     }
@@ -617,8 +404,14 @@ const convertAudioToText = async (audioFile: File): Promise<string> => {
 
     try {
         const result = await asrWsClient.execute(audioFile);
-        console.log(result);
-        return result.payloadMsg.text;
+        console.log('==> executed result:', result);
+
+        // 检查 result.payloadMsg 是否存在以及是否包含 text 属性
+        if (result.payloadMsg && result.payloadMsg.text) {
+            return result.payloadMsg.text;
+        } else {
+            throw new Error('Invalid response format');
+        }
     } catch (error) {
         console.error('Speech recognition failed:', error);
         throw new Error('Speech recognition failed');
@@ -630,6 +423,7 @@ export const handleAudioRequest = async (req: IAudioRequest): Promise<string> =>
     const { audioFile } = req;
 
     // 打印音频文件信息
+    console.log("\n\n---------------------------------");
     console.log("Audio file name:", audioFile.name);
     console.log("Audio file size:", audioFile.size);
     console.log("Audio file type:", audioFile.type);
