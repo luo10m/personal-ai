@@ -1,7 +1,6 @@
 import { IAudioRequest } from "./chat";
+import pako from 'pako';
 
-// const WebSocket = require('ws');
-// const zlib = require('zlib');
 const uuid = require('uuid');
 
 const appid = '1351964065';
@@ -65,6 +64,136 @@ function generateHeader(options = {}) {
 
     return header;
 }
+
+function parseResponse(res: ArrayBuffer): any {
+    const buffer = new Uint8Array(res);
+    const dataView = new DataView(buffer.buffer);
+
+    console.log("res type is ", typeof res);
+    console.log("REP: ", res);
+
+    const protocolVersion = dataView.getUint8(0) >> 4;
+    const headerSize = dataView.getUint8(0) & 0x0f;
+    const messageType = dataView.getUint8(1) >> 4;
+    const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
+    const serializationMethod = dataView.getUint8(2) >> 4;
+    const messageCompression = dataView.getUint8(2) & 0x0f;
+    const reserved = dataView.getUint8(3);
+    const headerExtensions = buffer.slice(4, headerSize * 4);
+    const payload = buffer.slice(headerSize * 4);
+
+    const result: any = {};
+    let payloadMsg = null;
+    let payloadSize = 0;
+
+    if (messageType === SERVER_FULL_RESPONSE) {
+        payloadSize = dataView.getUint32(headerSize * 4, true);
+        payloadMsg = payload.slice(4);
+    } else if (messageType === SERVER_ACK) {
+        const seq = dataView.getUint32(headerSize * 4, true);
+        result.seq = seq;
+        if (payload.length >= 8) {
+            payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+            payloadMsg = payload.slice(8);
+        }
+    } else if (messageType === SERVER_ERROR_RESPONSE) {
+        const code = dataView.getUint32(headerSize * 4, true);
+        result.code = code;
+        payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+        payloadMsg = payload.slice(8);
+    }
+
+    if (payloadMsg === null) {
+        return result;
+    }
+
+    if (messageCompression === GZIP_COMPRESSION) {
+        const decompressedData = pako.inflate(payloadMsg);
+        payloadMsg = new TextDecoder().decode(decompressedData);
+    }
+
+    if (serializationMethod === JSON_SERIALIZATION) {
+        try {
+            payloadMsg = JSON.parse(payloadMsg);
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            console.error('Received data:', payloadMsg);
+            return { error: 'Invalid JSON data received' };
+        }
+    } else if (serializationMethod !== NO_SERIALIZATION) {
+        payloadMsg = new TextDecoder().decode(payloadMsg);
+    }
+
+    result.payloadMsg = payloadMsg;
+    result.payloadSize = payloadSize;
+
+    return result;
+}
+
+
+
+// function parseResponse(res) {
+//     const buffer = new Uint8Array(res);
+//     const dataView = new DataView(buffer.buffer);
+
+//     const protocolVersion = dataView.getUint8(0) >> 4;
+//     const headerSize = dataView.getUint8(0) & 0x0f;
+//     const messageType = dataView.getUint8(1) >> 4;
+//     const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
+//     const serializationMethod = dataView.getUint8(2) >> 4;
+//     const messageCompression = dataView.getUint8(2) & 0x0f;
+//     const reserved = dataView.getUint8(3);
+//     const headerExtensions = buffer.slice(4, headerSize * 4);
+//     const payload = buffer.slice(headerSize * 4);
+
+//     const result = {};
+//     let payloadMsg = null;
+//     let payloadSize = 0;
+
+//     if (messageType === SERVER_FULL_RESPONSE) {
+//         payloadSize = dataView.getUint32(headerSize * 4, true);
+//         payloadMsg = payload.slice(4);
+//     } else if (messageType === SERVER_ACK) {
+//         const seq = dataView.getUint32(headerSize * 4, true);
+//         result.seq = seq;
+//         if (payload.length >= 8) {
+//             payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+//             payloadMsg = payload.slice(8);
+//         }
+//     } else if (messageType === SERVER_ERROR_RESPONSE) {
+//         const code = dataView.getUint32(headerSize * 4, true);
+//         result.code = code;
+//         payloadSize = dataView.getUint32(headerSize * 4 + 4, true);
+//         payloadMsg = payload.slice(8);
+//     }
+
+//     if (payloadMsg === null) {
+//         return result;
+//     }
+
+//     if (messageCompression === GZIP_COMPRESSION) {
+//         const decompressedData = pako.inflate(payloadMsg);
+//         payloadMsg = new TextDecoder().decode(decompressedData);
+//     }
+
+//     if (serializationMethod === JSON_SERIALIZATION) {
+//         try {
+//             payloadMsg = JSON.parse(payloadMsg);
+//         } catch (error) {
+//             console.error('Error parsing JSON:', error);
+//             console.error('Received data:', payloadMsg);
+//             return { error: 'Invalid JSON data received' };
+//         }
+//     } else if (serializationMethod !== NO_SERIALIZATION) {
+//         payloadMsg = new TextDecoder().decode(payloadMsg);
+//     }
+
+//     result.payloadMsg = payloadMsg;
+//     result.payloadSize = payloadSize;
+
+//     return result;
+// }
+
 
 // function parseResponse(res: string) {
 //     const buffer = new ArrayBuffer(res.length);
@@ -136,87 +265,87 @@ function generateHeader(options = {}) {
 //     return result;
 // }
 
-function parseResponse(res: string) {
-    const buffer = new ArrayBuffer(res.length);
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < res.length; i++) {
-        view[i] = res.charCodeAt(i);
-    }
+// function parseResponse(res) {
+// const buffer = new ArrayBuffer(res.length);
+// const view = new Uint8Array(buffer);
+// for (let i = 0; i < res.length; i++) {
+//     view[i] = res.charCodeAt(i);
+// }
 
-    const dataView = new DataView(buffer);
-    const protocolVersion = dataView.getUint8(0) >> 4;
-    console.log("protocolVersion:$%x", protocolVersion);
-    const headerSize = dataView.getUint8(0) & 0x0f;
-    console.log("headSize:$%x", headerSize);
-    const messageType = dataView.getUint8(1) >> 4;
-    console.log("messageType:%$x", messageType)
-    if (messageType == 0xf) {
-        console.log("!Server downpost error code.");
-    }
-    const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
-    console.log("messageTypeSpecificFlags:$%x", messageTypeSpecificFlags);
-    const serializationMethod = dataView.getUint8(2) >> 4;
-    console.log("serializationMethod:$%x", serializationMethod);
-    const messageCompression = dataView.getUint8(2) & 0x0f;
-    console.log("messageCompression:$%x", messageCompression);
-    const reserved = dataView.getUint8(3);
-    console.log("reserved:$%x", reserved);
-    const headerExtensions = new Uint8Array(buffer, 4, headerSize * 4 - 4);
-    console.log("headerExtensions:", headerExtensions);
-    const payload = new Uint8Array(buffer, headerSize * 4);
-    console.log("payload:", payload);
+// const dataView = new DataView(res);
+// const protocolVersion = dataView.getUint8(0) >> 4;
+// console.log("protocolVersion:$%x", protocolVersion);
+// const headerSize = dataView.getUint8(0) & 0x0f;
+// console.log("headSize:$%x", headerSize);
+// const messageType = dataView.getUint8(1) >> 4;
+// console.log("messageType:%$x", messageType)
+// if (messageType == 0xf) {
+//     console.log("!Server downpost error code.");
+// }
+// const messageTypeSpecificFlags = dataView.getUint8(1) & 0x0f;
+// console.log("messageTypeSpecificFlags:$%x", messageTypeSpecificFlags);
+// const serializationMethod = dataView.getUint8(2) >> 4;
+// console.log("serializationMethod:$%x", serializationMethod);
+// const messageCompression = dataView.getUint8(2) & 0x0f;
+// console.log("messageCompression:$%x", messageCompression);
+// const reserved = dataView.getUint8(3);
+// console.log("reserved:$%x", reserved);
+// const headerExtensions = new Uint8Array(buffer, 4, headerSize * 4 - 4);
+// console.log("headerExtensions:", headerExtensions);
+// const payload = new Uint8Array(buffer, headerSize * 4);
+// console.log("payload:", payload);
 
-    const result = {};
-    let payloadMsg = null;
-    let payloadSize = 0;
+// const result = {};
+// let payloadMsg = null;
+// let payloadSize = 0;
 
-    if (messageType === SERVER_FULL_RESPONSE) {
-        payloadSize = dataView.getUint32(headerSize * 4);
-        payloadMsg = payload.slice(4);
-    } else if (messageType === SERVER_ACK) {
-        const seq = dataView.getUint32(headerSize * 4);
-        result.seq = seq;
-        if (payload.length >= 8) {
-            payloadSize = dataView.getUint32(headerSize * 4 + 4);
-            payloadMsg = payload.slice(8);
-        }
-    } else if (messageType === SERVER_ERROR_RESPONSE) {
-        const code = dataView.getUint32(headerSize * 4);
-        result.code = code;
-        payloadSize = dataView.getUint32(headerSize * 4 + 4);
-        payloadMsg = payload.slice(8);
-    }
+// if (messageType === SERVER_FULL_RESPONSE) {
+//     payloadSize = dataView.getUint32(headerSize * 4);
+//     payloadMsg = payload.slice(4);
+// } else if (messageType === SERVER_ACK) {
+//     const seq = dataView.getUint32(headerSize * 4);
+//     result.seq = seq;
+//     if (payload.length >= 8) {
+//         payloadSize = dataView.getUint32(headerSize * 4 + 4);
+//         payloadMsg = payload.slice(8);
+//     }
+// } else if (messageType === SERVER_ERROR_RESPONSE) {
+//     const code = dataView.getUint32(headerSize * 4);
+//     result.code = code;
+//     payloadSize = dataView.getUint32(headerSize * 4 + 4);
+//     payloadMsg = payload.slice(8);
+// }
 
-    if (payloadMsg === null) {
-        return result;
-    }
+// if (payloadMsg === null) {
+//     return result;
+// }
 
-    if (messageCompression === GZIP_COMPRESSION) {
-        const decompressedData = pako.inflate(payloadMsg);
-        payloadMsg = new TextDecoder().decode(decompressedData);
-    }
+// if (messageCompression === GZIP_COMPRESSION) {
+//     const decompressedData = pako.inflate(payloadMsg);
+//     payloadMsg = new TextDecoder().decode(decompressedData);
+// }
 
-    if (serializationMethod === JSON_SERIALIZATION) {
-        try {
-            payloadMsg = JSON.parse(payloadMsg);
-        } catch (error) {
-            console.error('Error parsing JSON:', error);
-            console.error('Received data:', payloadMsg);
-            // 根据需要处理解析错误,例如返回错误结果或重试
-            return {
-                error: 'Invalid JSON data received',
-            };
-        }
-    } else if (serializationMethod !== NO_SERIALIZATION) {
-        payloadMsg = new TextDecoder().decode(payloadMsg);
-    }
+// if (serializationMethod === JSON_SERIALIZATION) {
+//     try {
+//         payloadMsg = JSON.parse(payloadMsg);
+//     } catch (error) {
+//         console.error('Error parsing JSON:', error);
+//         console.error('Received data:', payloadMsg);
+//         // 根据需要处理解析错误,例如返回错误结果或重试
+//         return {
+//             error: 'Invalid JSON data received',
+//         };
+//     }
+// } else if (serializationMethod !== NO_SERIALIZATION) {
+//     payloadMsg = new TextDecoder().decode(payloadMsg);
+// }
 
-    result.payloadMsg = payloadMsg;
-    result.payloadSize = payloadSize;
+// result.payloadMsg = payloadMsg;
+// result.payloadSize = payloadSize;
 
-    return result;
+// return result;
 
-}
+// }
 
 
 async function getWavInfo(audioFile: File): Promise<{ sampleRate: number; bitsPerSample: number; numChannels: number }> {
@@ -241,8 +370,8 @@ class AsrWsClient {
         this.successCode = options.successCode || 1000;
         this.segDuration = options.segDuration || 15000;
         this.nbest = options.nbest || 1;
-        this.appid = options.appid || '';
-        this.token = options.token || '';
+        this.appid = options.appid || '1351964065';
+        this.token = options.token || 'hpq9FUB9LyowvrwM3th4YlM4LvzbOHlR';
         this.wsUrl = options.wsUrl || 'wss://openspeech.bytedance.com/api/v2/asr';
         this.uid = options.uid || 'streaming_asr_demo';
         this.workflow = options.workflow || 'audio_in,resample,partition,vad,fe,decode,itn,nlu_punctuate';
@@ -307,19 +436,38 @@ class AsrWsClient {
         const encoder = new TextEncoder();
         const reqid = uuid.v4();
         const requestParams = this.constructRequest(reqid);
+        console.log('\nConstructParams: ', requestParams);
+
         const jsonString = JSON.stringify(requestParams);
         const jsonBytes = encoder.encode(jsonString);
         const payloadBytes = await gzipAsync(jsonBytes);
+
+        var buffer = new Uint32Array([payloadBytes.length]);
+        console.log("payloadBytes length: ", buffer);
+        const view = new DataView(buffer.buffer);
+        var bufferBig = view.getUint32(0, false);
+        console.log("payloadBytes - big - length: ", bufferBig.toString(16));
+        var b8 = new Uint8Array(4);
+        b8[0] = (bufferBig >> 0) & 0xff;
+        b8[1] = (bufferBig >> 8) & 0xff;
+        b8[2] = (bufferBig >> 16) & 0xff;
+        b8[3] = (bufferBig >> 24) & 0xff;
+
+
+        console.log("payloadByts length is: ", payloadBytes.length);
         const fullClientRequest = new Uint8Array([
-            ...generateFullDefaultHeader(),
-            ...new Uint8Array(new Uint32Array([payloadBytes.length]).buffer),
+            ...generateHeader(),
+            ...b8,
             ...payloadBytes
         ]);
-        console.log('HHH:', fullClientRequest, fullClientRequest.length);
+        // console.log('HHH:', fullClientRequest.toString('hex'),
+        //     fullClientRequest.length);
 
         const header = this.tokenAuth();
+        console.log('header is: \n', header);
         console.log('Connecting to wss servers...');
-        // const ws = new WebSocket(this.wsUrl, { headers: header });
+
+        // const ws = new WebSocket(this.wsUrl);
 
         // await new Promise((resolve) => {
         //     ws.on('open', () => {
@@ -374,11 +522,12 @@ class AsrWsClient {
             ws.onopen = () => {
                 console.log('WebSocket connection established.');
                 ws.send(fullClientRequest);
+                ws.send(JSON.stringify(header));
             };
 
             ws.onmessage = (event) => {
                 console.log('event.data type:', typeof event.data);
-                result = parseResponse(event.data);
+                result = parseResponse(event);
                 if (result.payloadMsg && result.payloadMsg.code !== this.successCode) {
                     console.error('Error response received:', result);
                     ws.close();
@@ -417,7 +566,7 @@ class AsrWsClient {
             ws.send(audioOnlyRequest);
 
             await new Promise((resolve) => {
-                ws.on('message', (data) => {
+                ws.onmessage = (data) => {
                     result = parseResponse(data);
                     if (result.payloadMsg && result.payloadMsg.code !== this.successCode) {
                         ws.close();
@@ -427,7 +576,7 @@ class AsrWsClient {
                         ws.close();
                         resolve(null);
                     }
-                });
+                };
             });
 
             seq++;
